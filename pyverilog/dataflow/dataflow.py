@@ -13,6 +13,9 @@ import sys
 import os
 import re
 import copy
+import abc
+from typing import List, Set, Tuple, Iterable
+from typing_extensions import Self
 
 dfnodelist = ('DFIntConst', 'DFFloatConst', 'DFStringConst',
               'DFEvalValue', 'DFUndefined', 'DFHighImpedance',
@@ -21,15 +24,16 @@ dfnodelist = ('DFIntConst', 'DFFloatConst', 'DFStringConst',
               'DFConcat', 'DFDelay', 'DFSyscall')
 
 
-def printIndent(s, indent=4):
+def printIndent(s:str, indent:int=4) -> None:
     print((' ' * indent) + s)
 
 
-def generateWalkTree(offset=1):
+def generateWalkTree(offset: int =1):
     base_indent = 4
     printIndent('def walkTree(tree):', base_indent * (0 + offset))
     for df in dfnodelist:
-        printIndent('if isinstance(tree, %s):' % df, base_indent * (1 + offset))
+        printIndent('if isinstance(tree, %s):' %
+                    df, base_indent * (1 + offset))
         printIndent('pass', base_indent * (2 + offset))
 
 
@@ -42,33 +46,38 @@ import pyverilog.utils.util as util
 import pyverilog.utils.signaltype as signaltype
 import pyverilog.utils.op2mark as op2mark
 
+class DFNode(abc.ABC):
+    attr_names : Tuple[str, ...] = ()
 
-class DFNode(object):
-    attr_names = ()
-
+    @abc.abstractmethod
     def __init__(self): pass
 
-    def __repr__(self): pass
+    @abc.abstractmethod
+    def __repr__(self) -> str: pass
 
-    def tostr(self): pass
+    @abc.abstractmethod
+    def tostr(self) -> str: pass
 
-    def tocode(self, dest='dest'): return self.__repr__()
+    @abc.abstractmethod
+    def tocode(self, dest='dest') -> str: return self.__repr__()
 
-    def tolabel(self): return self.__repr__()
+    @abc.abstractmethod
+    def tolabel(self) -> str: return self.__repr__()
 
-    def children(self):
-        nodelist = []
+    @abc.abstractmethod
+    def children(self) -> Tuple[Self, ...]:
+        nodelist: List[Self] = []
         return tuple(nodelist)
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if type(self) != type(other):
             return False
         return False
 
-    def __ne__(self, other):
+    def __ne__(self, other) -> bool:
         return not self.__eq__(other)
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return id(self)
 
 
@@ -100,8 +109,8 @@ class DFTerminal(DFNode):
     def tolabel(self):
         return self.tocode()
 
-    def children(self):
-        nodelist = []
+    def children(self) -> Tuple[Self, ...]:
+        nodelist: List[Self]= []
         return tuple(nodelist)
 
     def __eq__(self, other):
@@ -687,17 +696,18 @@ class DFSyscall(DFNotTerminal):
 
 
 class Term(object):
-    def __init__(self, name, termtype=(), msb=None, lsb=None, dims=None):
-        self.name = name  # tuple (str)
-        self.termtype = termtype  # set (str)
-        self.msb = msb  # DFNode
-        self.lsb = lsb  # DFNode
-        self.dims = dims  # tuple/list of pair of DFNode
+    def __init__(self, name: Tuple[str], termtype=(), msb: DFNode | None = None, lsb: DFNode | None = None, dims: Iterable[Tuple[DFNode, DFNode]] | None = None):
+        self.name: Tuple[str] = name  # tuple (str)
+        self.termtype: Set[str] = termtype  # set (str)
+        self.msb: DFNode | None = msb  # DFNode
+        self.lsb: DFNode | None = lsb  # DFNode 
+        # tuple/list of pair of DFNode
+        self.dims: Iterable[Tuple[DFNode, DFNode]] | None = dims
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return str(self.name)
 
-    def tostr(self):
+    def tostr(self) -> str:
         ret = '(Term name:' + str(self.name) + ' type:' + \
             str(sorted(self.termtype, key=lambda x: str(x)))
         if self.msb is not None:
@@ -766,7 +776,8 @@ class Term(object):
 
         if (not signaltype.isInteger(self.termtype)
                 and self.msb is not None and self.lsb is not None):
-            code += '[' + self.msb.tocode(None) + ':' + self.lsb.tocode(None) + '] '
+            code += '[' + self.msb.tocode(None) + \
+                ':' + self.lsb.tocode(None) + '] '
         code += flatname  # signal name
         if self.dims is not None:
             code += ''.join(['[' + l.tocode() + ':' + r.tocode() + ']'
@@ -957,7 +968,7 @@ class DataFlow(object):
         self.task_ports = {}
         self.temporal_value = {}
 
-    def addTerm(self, name, term):
+    def addTerm(self, name: str, term):
         if not name in self.terms:
             self.terms[name] = term
         else:
